@@ -1,0 +1,356 @@
+import { ref, watch, onUnmounted } from 'vue'
+import { useProjectStore } from '@/stores/projectStore'
+
+type OscillatorType = 'sine' | 'sawtooth' | 'square' | 'triangle'
+
+// Simple audio engine using WebAudio API
+class AudioEngine {
+  private audioContext: AudioContext | null = null
+  private masterGain: GainNode | null = null
+  private schedulerInterval: number | null = null
+  private nextStepTime = 0
+  private currentStep = 0
+  private isRunning = false
+  private onTick: ((step: number) => void) | null = null
+
+  async init(): Promise<void> {
+    if (this.audioContext) return
+
+    this.audioContext = new AudioContext()
+    this.masterGain = this.audioContext.createGain()
+    this.masterGain.connect(this.audioContext.destination)
+  }
+
+  setMasterVolume(volume: number): void {
+    if (this.masterGain) {
+      this.masterGain.gain.value = volume
+    }
+  }
+
+  start(bpm: number, onTick: (step: number) => void): void {
+    if (this.isRunning) return
+
+    this.onTick = onTick
+    this.isRunning = true
+    this.currentStep = 0
+
+    if (this.audioContext) {
+      this.nextStepTime = this.audioContext.currentTime
+      this.scheduler(bpm)
+    }
+  }
+
+  stop(): void {
+    this.isRunning = false
+    if (this.schedulerInterval) {
+      clearInterval(this.schedulerInterval)
+      this.schedulerInterval = null
+    }
+  }
+
+  private scheduler(bpm: number): void {
+    const stepDuration = 60 / bpm / 4 // 16th note duration
+
+    this.schedulerInterval = window.setInterval(() => {
+      if (!this.audioContext || !this.isRunning) return
+
+      while (this.nextStepTime < this.audioContext.currentTime + 0.1) {
+        this.onTick?.(this.currentStep)
+        this.nextStepTime += stepDuration
+        this.currentStep = (this.currentStep + 1) % 16
+      }
+    }, 25)
+  }
+
+  playOscillator(
+    type: OscillatorType,
+    frequency: number,
+    duration: number,
+    params: {
+      gain?: number
+      lpf?: number
+      pan?: number
+      delay?: number
+      reverb?: number
+    } = {}
+  ): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    const osc = this.audioContext.createOscillator()
+    const gainNode = this.audioContext.createGain()
+    const filter = this.audioContext.createBiquadFilter()
+    const panner = this.audioContext.createStereoPanner()
+
+    osc.type = type
+    osc.frequency.value = frequency
+
+    filter.type = 'lowpass'
+    filter.frequency.value = params.lpf || 20000
+
+    gainNode.gain.setValueAtTime(params.gain || 0.5, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration)
+
+    panner.pan.value = (params.pan || 0.5) * 2 - 1
+
+    osc.connect(filter)
+    filter.connect(gainNode)
+    gainNode.connect(panner)
+    panner.connect(this.masterGain)
+
+    osc.start()
+    osc.stop(this.audioContext.currentTime + duration)
+  }
+
+  playNoise(duration: number, params: { gain?: number; hpf?: number; lpf?: number } = {}): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    const bufferSize = this.audioContext.sampleRate * duration
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate)
+    const data = buffer.getChannelData(0)
+
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1
+    }
+
+    const noise = this.audioContext.createBufferSource()
+    noise.buffer = buffer
+
+    const gainNode = this.audioContext.createGain()
+    const hpf = this.audioContext.createBiquadFilter()
+    const lpf = this.audioContext.createBiquadFilter()
+
+    hpf.type = 'highpass'
+    hpf.frequency.value = params.hpf || 5000
+
+    lpf.type = 'lowpass'
+    lpf.frequency.value = params.lpf || 10000
+
+    gainNode.gain.setValueAtTime(params.gain || 0.3, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration)
+
+    noise.connect(hpf)
+    hpf.connect(lpf)
+    lpf.connect(gainNode)
+    gainNode.connect(this.masterGain)
+
+    noise.start()
+  }
+
+  // Simple drum synthesis
+  playKick(gain: number = 0.8): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    const osc = this.audioContext.createOscillator()
+    const gainNode = this.audioContext.createGain()
+
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(150, this.audioContext.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(40, this.audioContext.currentTime + 0.1)
+
+    gainNode.gain.setValueAtTime(gain, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.3)
+
+    osc.connect(gainNode)
+    gainNode.connect(this.masterGain)
+
+    osc.start()
+    osc.stop(this.audioContext.currentTime + 0.3)
+  }
+
+  playSnare(gain: number = 0.6): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    // Tone component
+    const osc = this.audioContext.createOscillator()
+    const oscGain = this.audioContext.createGain()
+
+    osc.type = 'triangle'
+    osc.frequency.value = 200
+
+    oscGain.gain.setValueAtTime(gain * 0.5, this.audioContext.currentTime)
+    oscGain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.1)
+
+    osc.connect(oscGain)
+    oscGain.connect(this.masterGain)
+
+    osc.start()
+    osc.stop(this.audioContext.currentTime + 0.1)
+
+    // Noise component
+    this.playNoise(0.15, { gain: gain * 0.5, hpf: 3000, lpf: 8000 })
+  }
+
+  playHihat(open: boolean = false, gain: number = 0.3): void {
+    const duration = open ? 0.3 : 0.08
+    this.playNoise(duration, { gain, hpf: 7000, lpf: 14000 })
+  }
+
+  playClap(gain: number = 0.5): void {
+    this.playNoise(0.15, { gain, hpf: 1500, lpf: 5000 })
+  }
+
+  dispose(): void {
+    this.stop()
+    if (this.audioContext) {
+      this.audioContext.close()
+      this.audioContext = null
+    }
+  }
+}
+
+const engine = new AudioEngine()
+
+export function useAudioEngine() {
+  const store = useProjectStore()
+  const isInitialized = ref(false)
+
+  async function init(): Promise<void> {
+    await engine.init()
+    isInitialized.value = true
+  }
+
+  function playSound(soundId: string, params: { gain?: number; lpf?: number } = {}): void {
+    const gain = params.gain ?? 0.8
+
+    switch (soundId) {
+      case 'bd':
+        engine.playKick(gain)
+        break
+      case 'sd':
+        engine.playSnare(gain)
+        break
+      case 'hh':
+        engine.playHihat(false, gain)
+        break
+      case 'oh':
+        engine.playHihat(true, gain)
+        break
+      case 'cp':
+        engine.playClap(gain)
+        break
+      case 'rim':
+        engine.playOscillator('square', 800, 0.05, { gain: gain * 0.3 })
+        break
+      case 'tom':
+        engine.playOscillator('sine', 100, 0.2, { gain })
+        break
+      case 'crash':
+        engine.playNoise(0.5, { gain: gain * 0.4, hpf: 5000, lpf: 15000 })
+        break
+      case 'sine':
+      case 'sawtooth':
+      case 'square':
+      case 'triangle':
+        engine.playOscillator(soundId as OscillatorType, 440, 0.3, { gain, lpf: params.lpf })
+        break
+      default:
+        engine.playOscillator('sine', 220, 0.2, { gain })
+    }
+  }
+
+  function noteToFrequency(note: string): number {
+    const noteRegex = /^([a-g]#?)(\d)$/i
+    const match = note.match(noteRegex)
+    if (!match) return 440
+
+    const noteNames: { [key: string]: number } = {
+      'c': 0, 'c#': 1, 'd': 2, 'd#': 3, 'e': 4, 'f': 5,
+      'f#': 6, 'g': 7, 'g#': 8, 'a': 9, 'a#': 10, 'b': 11
+    }
+
+    const noteName = match[1].toLowerCase()
+    const octave = parseInt(match[2])
+    const semitone = noteNames[noteName]
+
+    // A4 = 440Hz, semitone 9 in octave 4
+    const semitonesFromA4 = (octave - 4) * 12 + (semitone - 9)
+    return 440 * Math.pow(2, semitonesFromA4 / 12)
+  }
+
+  function playNote(note: string, soundId: string, params: { gain?: number; lpf?: number } = {}): void {
+    if (note === '~') return
+
+    const frequency = noteToFrequency(note)
+    const oscType = ['sine', 'sawtooth', 'square', 'triangle'].includes(soundId)
+      ? soundId as OscillatorType
+      : 'sawtooth'
+
+    engine.playOscillator(oscType, frequency, 0.3, {
+      gain: params.gain ?? 0.5,
+      lpf: params.lpf ?? 5000
+    })
+  }
+
+  function start(): void {
+    if (!isInitialized.value) {
+      init().then(() => startPlayback())
+    } else {
+      startPlayback()
+    }
+  }
+
+  function startPlayback(): void {
+    engine.setMasterVolume(store.masterVolume)
+
+    engine.start(store.bpm, (step) => {
+      store.currentStep = step
+
+      for (const track of store.activeTracks) {
+        if (track.type === 'drum') {
+          if (track.pattern[step]) {
+            playSound(track.soundId, {
+              gain: track.params.gain,
+              lpf: track.params.lpf
+            })
+          }
+        } else {
+          // Melodie - hrát každý druhý krok (8 not v 16 krocích)
+          if (step % 2 === 0) {
+            const noteIndex = step / 2
+            const note = track.notes[noteIndex]
+            if (note && note !== '~') {
+              playNote(note, track.soundId, {
+                gain: track.params.gain,
+                lpf: track.params.lpf
+              })
+            }
+          }
+        }
+      }
+    })
+
+    store.play()
+  }
+
+  function stop(): void {
+    engine.stop()
+    store.stop()
+  }
+
+  function toggle(): void {
+    if (store.isPlaying) {
+      stop()
+    } else {
+      start()
+    }
+  }
+
+  // Watch for volume changes
+  watch(() => store.masterVolume, (volume) => {
+    engine.setMasterVolume(volume)
+  })
+
+  onUnmounted(() => {
+    stop()
+  })
+
+  return {
+    isInitialized,
+    init,
+    start,
+    stop,
+    toggle,
+    playSound,
+    playNote
+  }
+}
