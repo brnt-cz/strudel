@@ -48,9 +48,9 @@ function isCurrentNote(index: number) {
       <select
         :value="track.rootNote || 'c'"
         @change="updateRootNote(($event.target as HTMLSelectElement).value)"
-        class="bg-surface-700 border border-surface-600 rounded px-2 py-1"
+        class="bg-surface-700 text-white border border-surface-600 rounded px-2 py-1"
       >
-        <option v-for="note in rootNotes" :key="note" :value="note">
+        <option v-for="note in rootNotes" :key="note" :value="note" class="bg-surface-800 text-white">
           {{ note.toUpperCase() }}
         </option>
       </select>
@@ -58,9 +58,9 @@ function isCurrentNote(index: number) {
       <select
         :value="track.scale || 'minor'"
         @change="updateScale(($event.target as HTMLSelectElement).value)"
-        class="bg-surface-700 border border-surface-600 rounded px-2 py-1 flex-1"
+        class="bg-surface-700 text-white border border-surface-600 rounded px-2 py-1 flex-1"
       >
-        <option v-for="scale in scaleNames" :key="scale.id" :value="scale.id">
+        <option v-for="scale in scaleNames" :key="scale.id" :value="scale.id" class="bg-surface-800 text-white">
           {{ scale.name }}
         </option>
       </select>
@@ -68,9 +68,9 @@ function isCurrentNote(index: number) {
       <select
         :value="track.octave || 3"
         @change="updateOctave(Number(($event.target as HTMLSelectElement).value))"
-        class="bg-surface-700 border border-surface-600 rounded px-2 py-1"
+        class="bg-surface-700 text-white border border-surface-600 rounded px-2 py-1"
       >
-        <option v-for="oct in [1, 2, 3, 4, 5]" :key="oct" :value="oct">
+        <option v-for="oct in [1, 2, 3, 4, 5]" :key="oct" :value="oct" class="bg-surface-800 text-white">
           Oct {{ oct }}
         </option>
       </select>
@@ -85,14 +85,14 @@ function isCurrentNote(index: number) {
           :value="note"
           @change="updateNote(index, ($event.target as HTMLSelectElement).value)"
           :class="[
-            'flex-1 min-w-0 bg-surface-700 border rounded px-1 py-1.5 text-xs text-center transition-all',
+            'flex-1 min-w-0 bg-surface-700 text-white border rounded px-1 py-1.5 text-xs text-center transition-all',
             isCurrentNote(index)
               ? 'border-white ring-1 ring-white'
               : 'border-surface-600'
           ]"
           :style="note !== '~' ? { borderColor: track.color, backgroundColor: track.color + '20' } : {}"
         >
-          <option v-for="opt in noteOptions" :key="opt" :value="opt">
+          <option v-for="opt in noteOptions" :key="opt" :value="opt" class="bg-surface-800 text-white">
             {{ opt === '~' ? '—' : opt }}
           </option>
         </select>

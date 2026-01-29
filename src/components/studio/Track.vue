@@ -406,18 +406,11 @@ function updateVowel(vowel: string) {
 
 .expand-enter-active,
 .expand-leave-active {
-  transition: all 0.2s ease;
-  overflow: hidden;
+  transition: opacity 0.2s ease;
 }
 
 .expand-enter-from,
 .expand-leave-to {
   opacity: 0;
-  max-height: 0;
-}
-
-.expand-enter-to,
-.expand-leave-from {
-  max-height: 300px;
 }
 </style>
