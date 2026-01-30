@@ -1,5 +1,6 @@
 import { ref, watch, onUnmounted } from 'vue'
 import { useProjectStore } from '@/stores/projectStore'
+import { sampleLoader } from '@/services/SampleLoader'
 
 type OscillatorType = 'sine' | 'sawtooth' | 'square' | 'triangle'
 
@@ -20,8 +21,19 @@ class AudioEngine {
     this.masterGain = this.audioContext.createGain()
     this.masterGain.connect(this.audioContext.destination)
 
+    // Initialize sample loader
+    await sampleLoader.init(this.audioContext)
+
     // Silent warmup - initialize audio pipeline without audible sound
     this.warmup()
+  }
+
+  getAudioContext(): AudioContext | null {
+    return this.audioContext
+  }
+
+  getMasterGain(): GainNode | null {
+    return this.masterGain
   }
 
   private warmup(): void {
@@ -531,6 +543,25 @@ class AudioEngine {
     gainNode.connect(this.masterGain)
   }
 
+  // === SAMPLE PLAYBACK ===
+
+  playSample(buffer: AudioBuffer, gain: number = 0.8, playbackRate: number = 1): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    const source = this.audioContext.createBufferSource()
+    const gainNode = this.audioContext.createGain()
+
+    source.buffer = buffer
+    source.playbackRate.value = playbackRate
+
+    gainNode.gain.value = gain
+
+    source.connect(gainNode)
+    gainNode.connect(this.masterGain)
+
+    source.start()
+  }
+
   dispose(): void {
     this.stop()
     if (this.audioContext) {
@@ -551,9 +582,36 @@ export function useAudioEngine() {
     isInitialized.value = true
   }
 
-  function playSound(soundId: string, params: { gain?: number; lpf?: number } = {}): void {
+  async function playSampleSound(drumBank: string, soundId: string, gain: number): Promise<boolean> {
+    if (!sampleLoader.initialized) return false
+
+    const buffer = await sampleLoader.loadSample(drumBank, soundId, 0)
+    if (buffer) {
+      engine.playSample(buffer, gain)
+      return true
+    }
+    return false
+  }
+
+  function playSound(soundId: string, params: { gain?: number; lpf?: number; drumBank?: string } = {}): void {
     const gain = params.gain ?? 0.8
 
+    // Try to play sample if drumBank is specified
+    if (params.drumBank) {
+      playSampleSound(params.drumBank, soundId, gain).then(played => {
+        if (!played) {
+          // Fall back to synthesized sound
+          playSynthesizedSound(soundId, gain, params.lpf)
+        }
+      })
+      return
+    }
+
+    // Play synthesized sound
+    playSynthesizedSound(soundId, gain, params.lpf)
+  }
+
+  function playSynthesizedSound(soundId: string, gain: number, lpf?: number): void {
     switch (soundId) {
       case 'bd':
         engine.playKick(gain)
@@ -602,7 +660,7 @@ export function useAudioEngine() {
       case 'sawtooth':
       case 'square':
       case 'triangle':
-        engine.playOscillator(soundId as OscillatorType, 440, 0.3, { gain, lpf: params.lpf })
+        engine.playOscillator(soundId as OscillatorType, 440, 0.3, { gain, lpf })
         break
       // Noise synths
       case 'white':
@@ -716,7 +774,8 @@ export function useAudioEngine() {
           if (track.pattern[step]) {
             playSound(track.soundId, {
               gain: track.params.gain,
-              lpf: track.params.lpf
+              lpf: track.params.lpf,
+              drumBank: track.drumBank
             })
           }
         } else {
@@ -776,6 +835,40 @@ export function useAudioEngine() {
     document.addEventListener('touchstart', handleInteraction, { once: true })
   }
 
+  // Preview a sample from a drum bank
+  async function previewSample(drumBank: string, soundType: string, variation: number = 0): Promise<void> {
+    if (!isInitialized.value) {
+      await init()
+    }
+    const buffer = await sampleLoader.loadSample(drumBank, soundType, variation)
+    if (buffer) {
+      engine.playSample(buffer, 0.8)
+    } else {
+      // Fall back to synthesized sound
+      playSynthesizedSound(soundType, 0.8)
+    }
+  }
+
+  // Get available drum machines
+  function getAvailableMachines(): string[] {
+    return sampleLoader.getAvailableMachines()
+  }
+
+  // Get available sound types for a machine
+  function getMachineSoundTypes(machine: string): string[] {
+    return sampleLoader.getSoundTypes(machine)
+  }
+
+  // Get sample count for a machine/sound
+  function getSampleCount(machine: string, soundType: string): number {
+    return sampleLoader.getSampleCount(machine, soundType)
+  }
+
+  // Preload samples for a machine
+  async function preloadMachine(machine: string): Promise<void> {
+    await sampleLoader.preloadMachine(machine)
+  }
+
   return {
     isInitialized,
     init,
@@ -784,6 +877,12 @@ export function useAudioEngine() {
     stop,
     toggle,
     playSound,
-    playNote
+    playNote,
+    previewSample,
+    getAvailableMachines,
+    getMachineSoundTypes,
+    getSampleCount,
+    preloadMachine,
+    sampleLoader
   }
 }
