@@ -210,6 +210,123 @@ class AudioEngine {
     this.playNoise(0.15, { gain, hpf: 1500, lpf: 5000 })
   }
 
+  playTom(frequency: number, gain: number = 0.7): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    const osc = this.audioContext.createOscillator()
+    const gainNode = this.audioContext.createGain()
+
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(frequency * 1.5, this.audioContext.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(frequency, this.audioContext.currentTime + 0.05)
+
+    gainNode.gain.setValueAtTime(gain, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.25)
+
+    osc.connect(gainNode)
+    gainNode.connect(this.masterGain)
+
+    osc.start()
+    osc.stop(this.audioContext.currentTime + 0.25)
+  }
+
+  playCowbell(gain: number = 0.4): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    // Two detuned square waves for metallic sound
+    const osc1 = this.audioContext.createOscillator()
+    const osc2 = this.audioContext.createOscillator()
+    const gainNode = this.audioContext.createGain()
+    const filter = this.audioContext.createBiquadFilter()
+
+    osc1.type = 'square'
+    osc2.type = 'square'
+    osc1.frequency.value = 560
+    osc2.frequency.value = 845
+
+    filter.type = 'bandpass'
+    filter.frequency.value = 700
+    filter.Q.value = 3
+
+    gainNode.gain.setValueAtTime(gain, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.4)
+
+    osc1.connect(filter)
+    osc2.connect(filter)
+    filter.connect(gainNode)
+    gainNode.connect(this.masterGain)
+
+    osc1.start()
+    osc2.start()
+    osc1.stop(this.audioContext.currentTime + 0.4)
+    osc2.stop(this.audioContext.currentTime + 0.4)
+  }
+
+  playCrash(gain: number = 0.4): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    // Long noise burst with high frequencies
+    this.playNoise(0.8, { gain, hpf: 4000, lpf: 16000 })
+  }
+
+  playRide(gain: number = 0.3): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    // Shorter, more focused metallic sound
+    this.playNoise(0.4, { gain, hpf: 6000, lpf: 12000 })
+  }
+
+  playShaker(gain: number = 0.3): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    // Short noise burst
+    this.playNoise(0.08, { gain, hpf: 8000, lpf: 14000 })
+  }
+
+  playRimshot(gain: number = 0.5): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    // Click + short tone
+    const osc = this.audioContext.createOscillator()
+    const gainNode = this.audioContext.createGain()
+
+    osc.type = 'triangle'
+    osc.frequency.value = 1800
+
+    gainNode.gain.setValueAtTime(gain, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.03)
+
+    osc.connect(gainNode)
+    gainNode.connect(this.masterGain)
+
+    osc.start()
+    osc.stop(this.audioContext.currentTime + 0.03)
+
+    // Add click
+    this.playNoise(0.02, { gain: gain * 0.5, hpf: 2000, lpf: 8000 })
+  }
+
+  playPerc(gain: number = 0.5): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    // Generic percussion - short pitched click
+    const osc = this.audioContext.createOscillator()
+    const gainNode = this.audioContext.createGain()
+
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(800, this.audioContext.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(400, this.audioContext.currentTime + 0.05)
+
+    gainNode.gain.setValueAtTime(gain, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.1)
+
+    osc.connect(gainNode)
+    gainNode.connect(this.masterGain)
+
+    osc.start()
+    osc.stop(this.audioContext.currentTime + 0.1)
+  }
+
   dispose(): void {
     this.stop()
     if (this.audioContext) {
@@ -250,13 +367,31 @@ export function useAudioEngine() {
         engine.playClap(gain)
         break
       case 'rim':
-        engine.playOscillator('square', 800, 0.05, { gain: gain * 0.3 })
+        engine.playRimshot(gain)
         break
-      case 'tom':
-        engine.playOscillator('sine', 100, 0.2, { gain })
+      case 'lt':
+        engine.playTom(80, gain) // Low tom - 80Hz
         break
-      case 'crash':
-        engine.playNoise(0.5, { gain: gain * 0.4, hpf: 5000, lpf: 15000 })
+      case 'mt':
+        engine.playTom(120, gain) // Mid tom - 120Hz
+        break
+      case 'ht':
+        engine.playTom(180, gain) // High tom - 180Hz
+        break
+      case 'cb':
+        engine.playCowbell(gain)
+        break
+      case 'cr':
+        engine.playCrash(gain)
+        break
+      case 'rd':
+        engine.playRide(gain)
+        break
+      case 'sh':
+        engine.playShaker(gain)
+        break
+      case 'perc':
+        engine.playPerc(gain)
         break
       case 'sine':
       case 'sawtooth':
