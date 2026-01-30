@@ -5,7 +5,7 @@ import AppNotification from '@/components/layout/AppNotification.vue'
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col">
+  <div class="h-screen flex flex-col overflow-hidden">
     <AppHeader />
     <main class="flex-1 flex overflow-hidden">
       <RouterView />

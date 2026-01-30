@@ -9,7 +9,7 @@ const { toggle, stop } = useAudioEngine()
 </script>
 
 <template>
-  <div class="h-20 bg-surface-900 border-t border-surface-700 flex items-center px-6 gap-6">
+  <div class="h-20 bg-surface-900 border-t border-surface-700 flex items-center px-6 gap-6 shrink-0">
     <!-- Transport controls -->
     <div class="flex items-center gap-2">
       <!-- Stop -->
