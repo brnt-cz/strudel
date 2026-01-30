@@ -6,6 +6,7 @@ import StepSequencer from './StepSequencer.vue'
 import NoteEditor from './NoteEditor.vue'
 import ParameterSlider from './ParameterSlider.vue'
 import SoundBrowser from './SoundBrowser.vue'
+import InstrumentBrowser from './InstrumentBrowser.vue'
 import Icon from '@/components/icons/Icon.vue'
 
 const props = defineProps<{
@@ -16,6 +17,7 @@ const projectStore = useProjectStore()
 const isExpanded = ref(false)
 const activeEffectTab = ref<'basic' | 'filter' | 'delay' | 'distort' | 'mod' | 'env'>('basic')
 const showSoundBrowser = ref(false)
+const showInstrumentBrowser = ref(false)
 
 const trackStyle = computed(() => ({
   borderLeftColor: props.track.color,
@@ -55,6 +57,10 @@ function updateDrumBank(bank: string) {
 function updateVowel(vowel: string) {
   projectStore.updateTrackParams(props.track.id, { vowel })
 }
+
+function updateInstrument(instrument: string) {
+  projectStore.updateTrack(props.track.id, { soundId: instrument })
+}
 </script>
 
 <template>
@@ -91,6 +97,17 @@ function updateVowel(vowel: string) {
       >
         <Icon name="DrumIcon" :size="14" class="text-surface-400" />
         <span>{{ track.drumBank || 'Syntetizér' }}</span>
+        <Icon name="ChevronRightIcon" :size="12" class="text-surface-500" />
+      </button>
+
+      <!-- Instrument selector for synth/bass -->
+      <button
+        v-if="track.type === 'synth' || track.type === 'bass'"
+        @click="showInstrumentBrowser = true"
+        class="bg-surface-700 border border-surface-600 rounded px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-surface-600 transition-colors"
+      >
+        <Icon name="WaveformIcon" :size="14" class="text-surface-400" />
+        <span>{{ track.soundId?.startsWith('gm_') ? track.soundId.replace('gm_', '').replace(/_/g, ' ') : track.soundId || 'Synth' }}</span>
         <Icon name="ChevronRightIcon" :size="12" class="text-surface-500" />
       </button>
 
@@ -409,6 +426,23 @@ function updateVowel(vowel: string) {
             :modelValue="track.drumBank"
             @update:modelValue="updateDrumBank"
             @close="showSoundBrowser = false"
+          />
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Instrument Browser Modal -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div
+          v-if="showInstrumentBrowser"
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+          @click.self="showInstrumentBrowser = false"
+        >
+          <InstrumentBrowser
+            :modelValue="track.soundId"
+            @update:modelValue="updateInstrument"
+            @close="showInstrumentBrowser = false"
           />
         </div>
       </Transition>

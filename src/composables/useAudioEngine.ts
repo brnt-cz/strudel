@@ -1,6 +1,7 @@
 import { ref, watch, onUnmounted } from 'vue'
 import { useProjectStore } from '@/stores/projectStore'
 import { sampleLoader } from '@/services/SampleLoader'
+import { soundfontLoader } from '@/services/SoundfontLoader'
 
 type OscillatorType = 'sine' | 'sawtooth' | 'square' | 'triangle'
 
@@ -23,6 +24,9 @@ class AudioEngine {
 
     // Initialize sample loader
     await sampleLoader.init(this.audioContext)
+
+    // Initialize soundfont loader
+    await soundfontLoader.init(this.audioContext)
 
     // Silent warmup - initialize audio pipeline without audible sound
     this.warmup()
@@ -715,6 +719,12 @@ export function useAudioEngine() {
     const frequency = noteToFrequency(note)
     const gain = params.gain ?? 0.5
 
+    // Check if it's a GM soundfont instrument
+    if (soundfontLoader.isGMInstrument(soundId)) {
+      playGMNote(soundId, note, gain)
+      return
+    }
+
     // Handle different synth types
     switch (soundId) {
       case 'sine':
@@ -753,6 +763,33 @@ export function useAudioEngine() {
           lpf: params.lpf ?? 5000
         })
     }
+  }
+
+  async function playGMNote(instrument: string, note: string, gain: number = 0.5): Promise<void> {
+    const midiNote = noteToMidi(note)
+    const soundfont = await soundfontLoader.loadInstrument(instrument)
+    const masterGain = engine.getMasterGain()
+
+    if (soundfont && masterGain) {
+      soundfontLoader.playNote(soundfont, midiNote, gain, 0.5, masterGain)
+    }
+  }
+
+  function noteToMidi(note: string): number {
+    const noteRegex = /^([a-g]#?)(\d)$/i
+    const match = note.match(noteRegex)
+    if (!match) return 60 // Default to middle C
+
+    const noteNames: { [key: string]: number } = {
+      'c': 0, 'c#': 1, 'd': 2, 'd#': 3, 'e': 4, 'f': 5,
+      'f#': 6, 'g': 7, 'g#': 8, 'a': 9, 'a#': 10, 'b': 11
+    }
+
+    const noteName = match[1].toLowerCase()
+    const octave = parseInt(match[2])
+    const semitone = noteNames[noteName]
+
+    return (octave + 1) * 12 + semitone
   }
 
   function start(): void {
@@ -869,6 +906,31 @@ export function useAudioEngine() {
     await sampleLoader.preloadMachine(machine)
   }
 
+  // === GM Soundfont functions ===
+
+  // Preview a GM instrument
+  async function previewGMInstrument(instrument: string, note: string = 'c4'): Promise<void> {
+    if (!isInitialized.value) {
+      await init()
+    }
+    await playGMNote(instrument, note, 0.7)
+  }
+
+  // Get available GM instruments
+  function getGMInstruments(): string[] {
+    return soundfontLoader.getAvailableInstruments()
+  }
+
+  // Get GM instruments by category
+  function getGMInstrumentsByCategory(): { category: string; instruments: string[] }[] {
+    return soundfontLoader.getInstrumentsByCategory()
+  }
+
+  // Check if instrument is GM
+  function isGMInstrument(name: string): boolean {
+    return soundfontLoader.isGMInstrument(name)
+  }
+
   return {
     isInitialized,
     init,
@@ -883,6 +945,12 @@ export function useAudioEngine() {
     getMachineSoundTypes,
     getSampleCount,
     preloadMachine,
-    sampleLoader
+    sampleLoader,
+    // GM Soundfont
+    previewGMInstrument,
+    getGMInstruments,
+    getGMInstrumentsByCategory,
+    isGMInstrument,
+    soundfontLoader
   }
 }
