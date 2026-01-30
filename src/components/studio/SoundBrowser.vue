@@ -91,7 +91,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="bg-surface-800 rounded-xl border border-surface-700 overflow-hidden max-h-[80vh] flex flex-col">
+  <div class="bg-surface-800 rounded-xl border border-surface-700 overflow-hidden w-[900px] h-[600px] flex flex-col">
     <!-- Header -->
     <div class="p-4 border-b border-surface-700 flex items-center justify-between">
       <h3 class="text-lg font-semibold text-white">Drum Machines</h3>
@@ -100,9 +100,9 @@ onMounted(async () => {
       </button>
     </div>
 
-    <div class="flex flex-1 overflow-hidden">
+    <div class="flex flex-1 overflow-hidden min-h-0">
       <!-- Bank list -->
-      <div class="w-64 border-r border-surface-700 overflow-y-auto">
+      <div class="w-64 shrink-0 border-r border-surface-700 overflow-y-auto">
         <div v-for="category in categories" :key="category.category" class="border-b border-surface-700/50">
           <!-- Category header -->
           <button
