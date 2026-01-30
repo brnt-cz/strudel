@@ -19,6 +19,27 @@ class AudioEngine {
     this.audioContext = new AudioContext()
     this.masterGain = this.audioContext.createGain()
     this.masterGain.connect(this.audioContext.destination)
+
+    // Silent warmup - initialize audio pipeline without audible sound
+    this.warmup()
+  }
+
+  private warmup(): void {
+    if (!this.audioContext) return
+
+    // Create a silent oscillator to "warm up" the audio system
+    const osc = this.audioContext.createOscillator()
+    const gainNode = this.audioContext.createGain()
+
+    // Set gain to 0 - completely silent
+    gainNode.gain.value = 0
+
+    osc.connect(gainNode)
+    gainNode.connect(this.audioContext.destination)
+
+    // Play for a very short duration
+    osc.start()
+    osc.stop(this.audioContext.currentTime + 0.001)
   }
 
   setMasterVolume(volume: number): void {
@@ -344,9 +365,26 @@ export function useAudioEngine() {
     stop()
   })
 
+  // Initialize audio on first user interaction (click, keypress, etc.)
+  function initOnInteraction(): void {
+    if (isInitialized.value) return
+
+    const handleInteraction = () => {
+      init()
+      document.removeEventListener('click', handleInteraction)
+      document.removeEventListener('keydown', handleInteraction)
+      document.removeEventListener('touchstart', handleInteraction)
+    }
+
+    document.addEventListener('click', handleInteraction, { once: true })
+    document.addEventListener('keydown', handleInteraction, { once: true })
+    document.addEventListener('touchstart', handleInteraction, { once: true })
+  }
+
   return {
     isInitialized,
     init,
+    initOnInteraction,
     start,
     stop,
     toggle,
