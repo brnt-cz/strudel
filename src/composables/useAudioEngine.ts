@@ -327,6 +327,210 @@ class AudioEngine {
     osc.stop(this.audioContext.currentTime + 0.1)
   }
 
+  // === NOISE SYNTHS ===
+
+  playWhiteNoise(_frequency: number, duration: number, gain: number = 0.3): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    const bufferSize = this.audioContext.sampleRate * duration
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate)
+    const data = buffer.getChannelData(0)
+
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1
+    }
+
+    const noise = this.audioContext.createBufferSource()
+    noise.buffer = buffer
+
+    const gainNode = this.audioContext.createGain()
+    gainNode.gain.setValueAtTime(gain, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration)
+
+    noise.connect(gainNode)
+    gainNode.connect(this.masterGain)
+
+    noise.start()
+  }
+
+  playPinkNoise(_frequency: number, duration: number, gain: number = 0.3): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    // Pink noise - filtered white noise with -3dB/octave rolloff
+    const bufferSize = this.audioContext.sampleRate * duration
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate)
+    const data = buffer.getChannelData(0)
+
+    // Simple pink noise approximation using Paul Kellet's algorithm
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1
+      b0 = 0.99886 * b0 + white * 0.0555179
+      b1 = 0.99332 * b1 + white * 0.0750759
+      b2 = 0.96900 * b2 + white * 0.1538520
+      b3 = 0.86650 * b3 + white * 0.3104856
+      b4 = 0.55000 * b4 + white * 0.5329522
+      b5 = -0.7616 * b5 - white * 0.0168980
+      data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11
+      b6 = white * 0.115926
+    }
+
+    const noise = this.audioContext.createBufferSource()
+    noise.buffer = buffer
+
+    const gainNode = this.audioContext.createGain()
+    gainNode.gain.setValueAtTime(gain, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration)
+
+    noise.connect(gainNode)
+    gainNode.connect(this.masterGain)
+
+    noise.start()
+  }
+
+  playBrownNoise(_frequency: number, duration: number, gain: number = 0.3): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    // Brown noise - integrated white noise (random walk)
+    const bufferSize = this.audioContext.sampleRate * duration
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate)
+    const data = buffer.getChannelData(0)
+
+    let lastOut = 0
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1
+      lastOut = (lastOut + (0.02 * white)) / 1.02
+      data[i] = lastOut * 3.5 // Normalize
+    }
+
+    const noise = this.audioContext.createBufferSource()
+    noise.buffer = buffer
+
+    const gainNode = this.audioContext.createGain()
+    gainNode.gain.setValueAtTime(gain, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration)
+
+    noise.connect(gainNode)
+    gainNode.connect(this.masterGain)
+
+    noise.start()
+  }
+
+  playCrackle(frequency: number, duration: number, gain: number = 0.3): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    // Crackle - sparse random pops
+    const bufferSize = this.audioContext.sampleRate * duration
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate)
+    const data = buffer.getChannelData(0)
+
+    const density = frequency / 1000 // Use frequency to control crackle density
+    for (let i = 0; i < bufferSize; i++) {
+      if (Math.random() < density * 0.01) {
+        // Random pop
+        const popLength = Math.min(100, bufferSize - i)
+        const amplitude = (Math.random() * 0.5 + 0.5)
+        for (let j = 0; j < popLength; j++) {
+          const env = 1 - (j / popLength)
+          data[i + j] += amplitude * env * (Math.random() * 2 - 1)
+        }
+      }
+    }
+
+    const noise = this.audioContext.createBufferSource()
+    noise.buffer = buffer
+
+    const gainNode = this.audioContext.createGain()
+    gainNode.gain.setValueAtTime(gain, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration)
+
+    noise.connect(gainNode)
+    gainNode.connect(this.masterGain)
+
+    noise.start()
+  }
+
+  // === FM / COMPLEX SYNTHS ===
+
+  playFM(frequency: number, duration: number, gain: number = 0.5): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    // FM synthesis - carrier modulated by modulator
+    const carrier = this.audioContext.createOscillator()
+    const modulator = this.audioContext.createOscillator()
+    const modGain = this.audioContext.createGain()
+    const gainNode = this.audioContext.createGain()
+
+    // Modulator frequency = 2x carrier (harmonic ratio)
+    modulator.frequency.value = frequency * 2
+    modGain.gain.value = frequency * 2 // Modulation depth
+
+    carrier.frequency.value = frequency
+
+    gainNode.gain.setValueAtTime(gain, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration)
+
+    // FM connection: modulator -> modGain -> carrier.frequency
+    modulator.connect(modGain)
+    modGain.connect(carrier.frequency)
+
+    carrier.connect(gainNode)
+    gainNode.connect(this.masterGain)
+
+    modulator.start()
+    carrier.start()
+    modulator.stop(this.audioContext.currentTime + duration)
+    carrier.stop(this.audioContext.currentTime + duration)
+  }
+
+  playSupersaw(frequency: number, duration: number, gain: number = 0.4): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    // Supersaw - 7 detuned sawtooth oscillators
+    const numOscs = 7
+    const detune = [-40, -25, -15, 0, 15, 25, 40]
+    const gainNode = this.audioContext.createGain()
+
+    gainNode.gain.setValueAtTime(gain / numOscs, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration)
+
+    for (let i = 0; i < numOscs; i++) {
+      const osc = this.audioContext.createOscillator()
+      osc.type = 'sawtooth'
+      osc.frequency.value = frequency
+      osc.detune.value = detune[i]
+      osc.connect(gainNode)
+      osc.start()
+      osc.stop(this.audioContext.currentTime + duration)
+    }
+
+    gainNode.connect(this.masterGain)
+  }
+
+  playSupersquare(frequency: number, duration: number, gain: number = 0.4): void {
+    if (!this.audioContext || !this.masterGain) return
+
+    // Supersquare - 5 detuned square oscillators with PWM-like effect
+    const numOscs = 5
+    const detune = [-30, -15, 0, 15, 30]
+    const gainNode = this.audioContext.createGain()
+
+    gainNode.gain.setValueAtTime(gain / numOscs, this.audioContext.currentTime)
+    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration)
+
+    for (let i = 0; i < numOscs; i++) {
+      const osc = this.audioContext.createOscillator()
+      osc.type = 'square'
+      osc.frequency.value = frequency
+      osc.detune.value = detune[i]
+      osc.connect(gainNode)
+      osc.start()
+      osc.stop(this.audioContext.currentTime + duration)
+    }
+
+    gainNode.connect(this.masterGain)
+  }
+
   dispose(): void {
     this.stop()
     if (this.audioContext) {
@@ -393,11 +597,35 @@ export function useAudioEngine() {
       case 'perc':
         engine.playPerc(gain)
         break
+      // Basic waveforms
       case 'sine':
       case 'sawtooth':
       case 'square':
       case 'triangle':
         engine.playOscillator(soundId as OscillatorType, 440, 0.3, { gain, lpf: params.lpf })
+        break
+      // Noise synths
+      case 'white':
+        engine.playWhiteNoise(440, 0.5, gain)
+        break
+      case 'pink':
+        engine.playPinkNoise(440, 0.5, gain)
+        break
+      case 'brown':
+        engine.playBrownNoise(440, 0.5, gain)
+        break
+      case 'crackle':
+        engine.playCrackle(440, 0.5, gain)
+        break
+      // FM / Complex synths
+      case 'fm':
+        engine.playFM(440, 0.3, gain)
+        break
+      case 'supersaw':
+        engine.playSupersaw(440, 0.3, gain)
+        break
+      case 'supersquare':
+        engine.playSupersquare(440, 0.3, gain)
         break
       default:
         engine.playOscillator('sine', 220, 0.2, { gain })
@@ -427,14 +655,46 @@ export function useAudioEngine() {
     if (note === '~') return
 
     const frequency = noteToFrequency(note)
-    const oscType = ['sine', 'sawtooth', 'square', 'triangle'].includes(soundId)
-      ? soundId as OscillatorType
-      : 'sawtooth'
+    const gain = params.gain ?? 0.5
 
-    engine.playOscillator(oscType, frequency, 0.3, {
-      gain: params.gain ?? 0.5,
-      lpf: params.lpf ?? 5000
-    })
+    // Handle different synth types
+    switch (soundId) {
+      case 'sine':
+      case 'sawtooth':
+      case 'square':
+      case 'triangle':
+        engine.playOscillator(soundId as OscillatorType, frequency, 0.3, {
+          gain,
+          lpf: params.lpf ?? 5000
+        })
+        break
+      case 'white':
+        engine.playWhiteNoise(frequency, 0.3, gain)
+        break
+      case 'pink':
+        engine.playPinkNoise(frequency, 0.3, gain)
+        break
+      case 'brown':
+        engine.playBrownNoise(frequency, 0.3, gain)
+        break
+      case 'crackle':
+        engine.playCrackle(frequency, 0.3, gain)
+        break
+      case 'fm':
+        engine.playFM(frequency, 0.3, gain)
+        break
+      case 'supersaw':
+        engine.playSupersaw(frequency, 0.3, gain)
+        break
+      case 'supersquare':
+        engine.playSupersquare(frequency, 0.3, gain)
+        break
+      default:
+        engine.playOscillator('sawtooth', frequency, 0.3, {
+          gain,
+          lpf: params.lpf ?? 5000
+        })
+    }
   }
 
   function start(): void {
