@@ -157,16 +157,18 @@ onMounted(async () => {
               </div>
 
               <!-- Variation buttons -->
-              <div class="flex flex-wrap gap-1">
+              <div class="flex flex-wrap gap-1.5">
                 <button
                   v-for="i in Math.min(sound.count, 8)"
                   :key="i"
                   @click="playPreview(sound.type, i - 1)"
                   :class="[
-                    'w-7 h-7 rounded text-xs font-medium transition-all',
+                    'w-8 h-8 rounded-md text-xs font-bold transition-all border shadow-sm',
+                    'flex items-center justify-center',
+                    'active:scale-95 active:shadow-none',
                     loadingSound === `${sound.type}_${i - 1}`
-                      ? 'bg-primary-600 text-white animate-pulse'
-                      : 'bg-surface-600 text-surface-300 hover:bg-primary-600 hover:text-white'
+                      ? 'bg-primary-500 text-white border-primary-400 shadow-primary-500/30 animate-pulse'
+                      : 'bg-surface-600 text-surface-200 border-surface-500 hover:bg-primary-600 hover:text-white hover:border-primary-500 hover:shadow-md'
                   ]"
                 >
                   {{ i }}
